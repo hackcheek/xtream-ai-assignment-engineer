@@ -1,0 +1,150 @@
+# PIPELINE DEFINITION
+# Name: challenge-2-pipeline
+# Description: The goal is run this pipeline every time that database is updated and     train the model with the new data
+# Inputs:
+#    csv_file: str
+components:
+  comp-preprocess-csv-component:
+    executorLabel: exec-preprocess-csv-component
+    inputDefinitions:
+      parameters:
+        user_data_path:
+          parameterType: STRING
+  comp-pytorch-model-train-component:
+    executorLabel: exec-pytorch-model-train-component
+    inputDefinitions:
+      parameters:
+        train_dataset_path:
+          parameterType: STRING
+        val_dataset_path:
+          parameterType: STRING
+    outputDefinitions:
+      parameters:
+        Output:
+          parameterType: STRING
+deploymentSpec:
+  executors:
+    exec-preprocess-csv-component:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - preprocess_csv_component
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.7.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef preprocess_csv_component(user_data_path: str):\n    print(\"\
+          [*] Preprocessing and Splitting data\")\n\n    print(f\"{user_data_path=}\"\
+          )\n    return 'hola desde preprocess'\n    raise RuntimeError()\n\n    train_set_path\
+          \ = 'challenge2/datasets/train_data_path.csv'\n    test_set_path = 'challenge2/datasets/test_data_path.csv'\n\
+          \    val_set_path = 'challenge2/datasets/val_data_path.csv'\n\n    user_data\
+          \ = pd.read_csv(user_data_path)\n    train_data, test_data, val_data = DiamondsDataTransform.preprocessing(user_data)\n\
+          \    train_data.to_csv(train_set_path)\n    test_data.to_csv(test_set_path)\n\
+          \    val_data.to_csv(val_set_path)\n    return train_set_path, test_set_path,\
+          \ val_set_path\n\n"
+        image: python:3.8
+    exec-pytorch-model-train-component:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - pytorch_model_train_component
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.7.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef pytorch_model_train_component(train_dataset_path: str, val_dataset_path:\
+          \ str) -> str:\n    checkpoints_path = get_checkpoints_path()\n    train_dataset\
+          \ = pd.read_csv(train_dataset_path) \n    val_dataset = pd.read_csv(val_dataset_path)\
+          \ \n    cat_features = list(filter(\n        lambda x: x not in DiamondsDatasetConfig.NUMERICAL_FEATURES\
+          \ + [DiamondsDatasetConfig.TARGET],\n        train_dataset.columns\n   \
+          \ ))\n    train_dataset = DiamondsPytorchDataset(\n        train_dataset,\n\
+          \        cat_features,\n        DiamondsDatasetConfig.NUMERICAL_FEATURES,\n\
+          \        DiamondsDatasetConfig.TARGET\n    )\n    val_dataset = DiamondsPytorchDataset(\n\
+          \        train_dataset,\n        cat_features,\n        DiamondsDatasetConfig.NUMERICAL_FEATURES,\n\
+          \        DiamondsDatasetConfig.TARGET\n    )\n\n    train_loader = DataLoader(train_dataset,\
+          \ batch_size=1024, shuffle=True)\n    val_loader = DataLoader(val_dataset,\
+          \ batch_size=1024, shuffle=True)\n\n    embedding_dim = 3\n    model = RegressionModel(\n\
+          \        len(cat_features),\n        embedding_dim,\n        len(DiamondsDatasetConfig.NUMERICAL_FEATURES)\n\
+          \    )\n    loss_fn = torch.nn.MSELoss()\n    optimizer = torch.optim.Adam(model.parameters(),\
+          \ lr=0.001)\n\n    print(\"[*] Starting training loop\")\n\n    best_epoch\
+          \ = training_loop(\n        model,\n        train_loader,\n        val_loader,\n\
+          \        optimizer,\n        loss_fn,\n        len(train_dataset),\n   \
+          \     len(val_dataset),\n        checkpoints_path,\n    )\n\n    return\
+          \ os.path.join(checkpoints_path, f'epoch_{best_epoch}', 'weights.pth')\n\
+          \n"
+        image: python:3.8
+pipelineInfo:
+  description: The goal is run this pipeline every time that database is updated and     train
+    the model with the new data
+  name: challenge-2-pipeline
+root:
+  dag:
+    tasks:
+      preprocess-csv-component:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-preprocess-csv-component
+        inputs:
+          parameters:
+            user_data_path:
+              componentInputParameter: csv_file
+        taskInfo:
+          name: preprocess-csv-component
+      pytorch-model-train-component:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-pytorch-model-train-component
+        dependentTasks:
+        - preprocess-csv-component
+        inputs:
+          parameters:
+            train_dataset_path:
+              runtimeValue:
+                constant: ''
+            val_dataset_path:
+              runtimeValue:
+                constant: ''
+        taskInfo:
+          name: pytorch-model-train-component
+  inputDefinitions:
+    parameters:
+      csv_file:
+        parameterType: STRING
+schemaVersion: 2.1.0
+sdkVersion: kfp-2.7.0
