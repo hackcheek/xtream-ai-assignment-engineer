@@ -1,110 +1,181 @@
-import pandas as pd
-import torch
-import os
-import json
-
 from kfp import dsl
-from torch.utils.data import DataLoader
+from functools import partial
+
 from challenge2.src.configs import DiamondsDatasetConfig
-from challenge2.src.utils.datasets import DiamondsPytorchDataset
-from challenge2.src.utils.models import RegressionModel
 
 
-def training_loop(
-    model,
-    train_loader,
-    val_loader,
-    optimizer,
-    loss_fn,
-    train_dataset_length,
-    val_dataset_length,
-    checkpoints_path,
+@dsl.component(base_image='python:3.10', packages_to_install=['pandas', 'torch', 'numpy'])
+def _pytorch_model_train_component(
+    train_dataset: dsl.Input[dsl.Dataset],
+    val_dataset: dsl.Input[dsl.Dataset],
+    num_epochs: int,
+    dataset_cfg: dict,
+    best_model: dsl.Output[dsl.Model]
 ):
-    num_epochs = 50
-    best_loss = float('inf')
-    best_epoch = 0
+    import pandas as pd
+    import numpy as np
+    import torch
+    import os
+    import json
+    import tempfile
 
-    for epoch in range(num_epochs):
-        model.train()
-        train_loss = 0.0
-        for x_cat, x_num, y in train_loader:
-            optimizer.zero_grad()
-            pred = model(x_cat, x_num)
-            loss = loss_fn(pred, y)
-            loss.backward()
-            optimizer.step()
+    from torch.utils.data import DataLoader, Dataset
 
-            train_loss += loss.item() * x_cat.size(0)
 
-        model.eval()
-        val_loss = 0.0
-        with torch.no_grad():
-            for x_cat, x_num, y in val_loader:
+    checkpoints_directory = tempfile.tempdir
+
+
+    class RegressionModel(torch.nn.Module):
+        def __init__(self, cat_features_amount, embedding_dim, num_features_amount):
+            super(RegressionModel, self).__init__()
+            self.embedding = torch.nn.Embedding(
+                num_embeddings=cat_features_amount,
+                embedding_dim=embedding_dim
+            )
+            self.relu = torch.nn.ReLU()
+            self.sig = torch.nn.Sigmoid()
+            self.dense1 = torch.nn.Linear(
+                (embedding_dim * cat_features_amount) + num_features_amount,
+                512
+            )
+            self.dense2 = torch.nn.Linear(512, 1024)
+            self.dense3 = torch.nn.Linear(1024, 512)
+            self.dense4 = torch.nn.Linear(512, 128)
+            self.out = torch.nn.Linear(128, 1)
+
+        def forward(self, x_cat, x_num):
+            x_cat = self.embedding(x_cat)
+            x_cat = x_cat.view(x_cat.size(0), -1)
+            x = torch.cat([x_cat, x_num], dim=1)
+
+            x = self.dense1(x)
+            x = self.relu(x)
+            x = self.dense2(x)
+            x = self.relu(x)
+            x = self.dense3(x)
+            x = self.relu(x)
+            x = self.dense4(x)
+            x = self.sig(x)
+            x = self.out(x)
+            return x
+
+
+    class DiamondsPytorchDataset(Dataset):
+        def __init__(self, data, cat_features, num_features, label):
+            self.data = data
+            self.cat_features = cat_features
+            self.num_features = num_features
+            self.label = label
+
+        def __len__(self):
+            return self.data.shape[0]
+
+        def __getitem__(self, idx):
+            row = self.data.iloc[idx]
+            x_num = torch.from_numpy(
+                row[self.num_features].to_numpy().astype(np.float32)
+            ).view(-1)
+
+            x_cat = torch.from_numpy(
+                row[self.cat_features].to_numpy().astype(np.int32)
+            ).view(-1)
+
+            target = torch.from_numpy(row[[self.label]].to_numpy().astype(np.float32))
+            return x_cat, x_num, target
+
+
+    def training_loop(
+        model,
+        train_loader,
+        val_loader,
+        optimizer,
+        loss_fn,
+        train_dataset_length,
+        val_dataset_length,
+        checkpoints_directory,
+        num_epochs,
+    ):
+        best_loss = float('inf')
+        best_epoch = 0
+
+        for epoch in range(num_epochs):
+            model.train()
+            train_loss = 0.0
+            for x_cat, x_num, y in train_loader:
+                optimizer.zero_grad()
                 pred = model(x_cat, x_num)
                 loss = loss_fn(pred, y)
-                val_loss += loss.item() * x_cat.size(0)
+                loss.backward()
+                optimizer.step()
 
-        train_loss = train_loss / train_dataset_length
-        val_loss = val_loss / val_dataset_length
+                train_loss += loss.item() * x_cat.size(0)
 
-        if val_loss < best_loss:
-            best_loss = val_loss
-            best_epoch = epoch + 1
+            model.eval()
+            val_loss = 0.0
+            with torch.no_grad():
+                for x_cat, x_num, y in val_loader:
+                    pred = model(x_cat, x_num)
+                    loss = loss_fn(pred, y)
+                    val_loss += loss.item() * x_cat.size(0)
 
-        save_dir = os.path.join(checkpoints_path, f'epoch_{epoch + 1}')
-        torch.save(model.state_dict, os.path.join(save_dir, 'weights.pth'))
-        metadata = {
-            'train_loss': train_loss,
-            'val_loss': val_loss,
-        }
-        with open(os.path.join(save_dir, 'metadata.json'), 'w') as mfile:
-            json.dump(metadata, mfile)
+            train_loss = train_loss / train_dataset_length
+            val_loss = val_loss / val_dataset_length
 
-        print(f'Epoch {epoch+1}, train_loss: {train_loss:.4f}, val_loss: {val_loss:.4f}')
+            save_dir = os.path.join(checkpoints_directory, f'epoch_{epoch + 1}')
+            if not os.path.exists(save_dir):
+                os.makedirs(save_dir)
+            weights_path = os.path.join(save_dir, 'weights.pth')
+            torch.save(model.state_dict(), weights_path)
 
-    return best_epoch
+            if val_loss < best_loss:
+                best_loss = val_loss
+                best_epoch = epoch + 1
+
+            metadata = {
+                'train_loss': train_loss,
+                'val_loss': val_loss,
+                'best_epoch': best_epoch,
+                'best_loss': best_loss,
+            }
+
+            with open(os.path.join(save_dir, 'metadata.json'), 'w') as mfile:
+                json.dump(metadata, mfile)
+
+            print(f'Epoch {epoch+1}, train_loss: {train_loss:.4f}, val_loss: {val_loss:.4f}')
+
+        return best_epoch
 
 
-def get_checkpoints_path():
-    checkpoints_path_template = 'challenge2/checkpoints/run_{}'
-    n = 1
-    path = checkpoints_path_template.format(n)
-    while os.path.exists(path):
-        n += 1
-        path = checkpoints_path_template.format(n)
-    return path
+    _train_dataset = pd.read_csv(train_dataset.path) 
+    _val_dataset = pd.read_csv(val_dataset.path) 
 
-
-@dsl.component(base_image='python:3.8')
-def pytorch_model_train_component(train_dataset_path: str, val_dataset_path: str) -> str:
-    checkpoints_path = get_checkpoints_path()
-    train_dataset = pd.read_csv(train_dataset_path) 
-    val_dataset = pd.read_csv(val_dataset_path) 
     cat_features = list(filter(
-        lambda x: x not in DiamondsDatasetConfig.NUMERICAL_FEATURES + [DiamondsDatasetConfig.TARGET],
-        train_dataset.columns
+        lambda x: x not in dataset_cfg['NUMERICAL_FEATURES'] + [dataset_cfg['TARGET']],
+        _train_dataset.columns
     ))
-    train_dataset = DiamondsPytorchDataset(
-        train_dataset,
+
+    _train_dataset = DiamondsPytorchDataset(
+        _train_dataset,
         cat_features,
-        DiamondsDatasetConfig.NUMERICAL_FEATURES,
-        DiamondsDatasetConfig.TARGET
-    )
-    val_dataset = DiamondsPytorchDataset(
-        train_dataset,
-        cat_features,
-        DiamondsDatasetConfig.NUMERICAL_FEATURES,
-        DiamondsDatasetConfig.TARGET
+        dataset_cfg['NUMERICAL_FEATURES'],
+        dataset_cfg['TARGET']
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=1024, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=1024, shuffle=True)
+    _val_dataset = DiamondsPytorchDataset(
+        _val_dataset,
+        cat_features,
+        dataset_cfg['NUMERICAL_FEATURES'],
+        dataset_cfg['TARGET']
+    )
+
+    train_loader = DataLoader(_train_dataset, batch_size=1024, shuffle=True)
+    val_loader = DataLoader(_val_dataset, batch_size=1024, shuffle=True)
 
     embedding_dim = 3
     model = RegressionModel(
         len(cat_features),
         embedding_dim,
-        len(DiamondsDatasetConfig.NUMERICAL_FEATURES)
+        len(dataset_cfg['NUMERICAL_FEATURES'])
     )
     loss_fn = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
@@ -117,9 +188,19 @@ def pytorch_model_train_component(train_dataset_path: str, val_dataset_path: str
         val_loader,
         optimizer,
         loss_fn,
-        len(train_dataset),
-        len(val_dataset),
-        checkpoints_path,
+        len(_train_dataset),
+        len(_val_dataset),
+        checkpoints_directory,
+        num_epochs,
     )
 
-    return os.path.join(checkpoints_path, f'epoch_{best_epoch}', 'weights.pth')
+    best_weights_path = os.path.join(checkpoints_directory, f'epoch_{best_epoch}', 'weights.pth')
+    model.load_state_dict(torch.load(best_weights_path))
+    torch.jit.script(model).save(best_model.path)
+
+
+
+pytorch_model_train_component = partial(
+    _pytorch_model_train_component,
+    dataset_cfg=DiamondsDatasetConfig.asdict()
+)

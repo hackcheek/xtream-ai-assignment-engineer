@@ -12,4 +12,6 @@ Complete dataset has +192k records! For this challenge, I will use only 2k examp
 
 
 ### Training Aspects
-I'll train svm-rbf model with old data + new data for each training iteration. Because, this model doesn't consume a lot of resources.
+I'll train the model with old data + new data from scratch to handle data drifting as best as possible.
+However I know this is not the best approach for every case. Another approach is doing incremental training, I mean, training the pre-trained model with new data only.
+This approach is very useful for model as a service and fast iteration
