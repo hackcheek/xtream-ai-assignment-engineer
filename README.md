@@ -82,4 +82,13 @@ So, ready to add some sparkle to this challenge? Let's make these diamonds shine
 ---
 
 ## How to run
-Please fill this section as part of the assignment.
+I develop a makefile to run this repository.
+
+run challenge1:
+make ch1
+
+run challenge2:
+make ch2
+
+run challenge3:
+make ch3
