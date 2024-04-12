@@ -4,7 +4,10 @@ ch1:
 ch2: ch2_download_data ch2_run_pipeline
 
 ch2_run_pipeline: ch2_pf_minio_pod
-	python -m challenge2.src.pipelines.challenge2
+	python -m challenge2.src.pipelines.challenge2 run
+
+ch2_save_pipeline: ch2_pf_minio_pod
+	python -m challenge2.src.pipelines.challenge2 save
 
 ch2_download_data:
 	bash challenge2/download_new_dataset.sh
@@ -27,5 +30,21 @@ start_kubeflow_cluster:
 	kubectl wait --for condition=established --timeout=60s crd/applications.app.k8s.io
 	kubectl apply -k "github.com/kubeflow/pipelines/manifests/kustomize/env/platform-agnostic-emissary?ref=$PIPELINE_VERSION"
 
-restart_kubeflow:
+restart_kubeflow: delete_experiment_containers
 	kubectl rollout restart deployment/ml-pipeline-ui -n kubeflow
+
+delete_experiment_containers:
+	kubectl get pod -n kubeflow | grep challenge | awk '{print $1}' | xargs kubectl delete pod -n kubeflow
+
+
+ch3:
+	lsof -i :9595 | grep -i python | head -n 1 | awk '{print $$2}' | xargs kill
+	python -m challenge3.src.main &
+	sleep 5; pytest
+	open http://localhost:9595/docs
+
+ch3_start_api:
+	python -m challenge3.src.main
+
+ch3_run_tests:
+	pytest

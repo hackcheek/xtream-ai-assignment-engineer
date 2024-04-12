@@ -19,6 +19,9 @@ class DiamondsDatasetConfig(Config):
     COLOR_LABELS: list[str] = ['H', 'I', 'F', 'G', 'E', 'D', 'J']
     CUT_LABELS: list[str] = ['Ideal', 'Premium', 'Very Good', 'Good', 'Fair']
     CLARITY_LABELS: list[str] = ['SI2', 'SI1', 'VS2', 'IF', 'VVS2', 'VS1', 'I1', 'VVS1']
+    POSITIVE_DATA: list[str] = ['price', 'x']
+    ZSCORE_WITH_THRESHOLD_4 = ['table', 'depth', 'carat']
+    ZSCORE_WITH_THRESHOLD_3 = ['x', 'y', 'z', 'price']
 
 
 class MinioConfig(Config):

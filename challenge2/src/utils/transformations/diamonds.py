@@ -1,50 +1,66 @@
+import json
 import pandas as pd
 import numpy as np
+import torch
+import os
 
 from challenge2.src.utils.transformations.base import BaseDataTransform
 from challenge2.src.configs import DiamondsDatasetConfig
-from challenge2.src.utils.common import random_split
+from typing import cast
 
 
 class DiamondsDataTransform(BaseDataTransform, DiamondsDatasetConfig):
 
     @classmethod
-    def preprocessing(cls, data: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-        # Capture just the important features and target
-        data = data[cls.TRAINING_FEATURES + [cls.TARGET]]
-        
-        # Price should be more than zero
-        data = data.loc[data['price'] > 0]
-        
-        # Sizes should be more than zero
-        data = data.loc[data['x'] > 0]
+    def preprocessing(
+        cls,
+        data: pd.DataFrame,
+        for_inference: bool = False
+    ) -> tuple[pd.DataFrame, dict]:
+        metadata = {}
 
-        # Drop outliers
-        data = cls.drop_outliers(data)
+        # Capture just the important features and target
+        if for_inference:
+            data = data[cls.TRAINING_FEATURES]
+        else:
+            data = data[cls.TRAINING_FEATURES + [cls.TARGET]]
 
         # Drop unknown categorical labels
-        data = cls.drop_unknown_labels(data)
+        if not for_inference:
+            data = cls.drop_unknown_labels(data)
 
         # Process variables for training
         for col_name in data.columns:
+            if col_name in cls.POSITIVE_DATA:
+                data = data.loc[data[col_name] > 0]
+            
+            if not for_inference:
+                data = cls.drop_outliers(data, col_name)
+
             if col_name in cls.CATEGORICAL_FEATURES:      
                 data = cls.apply_one_hot_encoder(data, col_name)
-            elif col_name in cls.NUMERICAL_FEATURES + [cls.TARGET]:
+            elif col_name in cls.NUMERICAL_FEATURES:
                 data[col_name] = cls.apply_std_scaler(data[col_name])
+            elif col_name == cls.TARGET:
+                data[col_name], m = cls.apply_target_scaler(data[col_name])
+                metadata.update(m)
 
-        train_data, test_data, val_data = random_split(data, [0.6, 0.3, 0.1])
-        return train_data, test_data, val_data
+        return data, metadata
 
 
     @classmethod
-    def postprocessing(cls, current_data: pd.DataFrame, user_data: pd.DataFrame) -> pd.DataFrame:
-        target_std = user_data[cls.TARGET].std()
-        target_mean = user_data[cls.TARGET].mean()
-        col = current_data[cls.TARGET]
-        col *= target_std
-        col += target_mean
-        current_data[cls.TARGET] = col
-        return current_data
+    def postprocessing(
+        cls, tensor: np.ndarray | torch.Tensor,
+        metadata: dict | str | os.PathLike
+    ) -> np.ndarray | torch.Tensor:
+        if isinstance(metadata, (str, os.PathLike)):
+            with open(metadata, 'r') as f:
+                metadata = cast(dict, json.load(f))
+            
+        tensor *= metadata['target_std']
+        tensor += metadata['target_mu']
+        tensor = np.exp(tensor)
+        return tensor
     
 
     @staticmethod
@@ -55,14 +71,11 @@ class DiamondsDataTransform(BaseDataTransform, DiamondsDatasetConfig):
 
 
     @classmethod
-    def drop_outliers(cls, data):
-        threshold_4_cols = ['table', 'depth', 'carat']
-        threshold_3_cols = ['x', 'y', 'z']
-        for col_name in data.columns:
-            if col_name in threshold_4_cols:
-                data = data[cls.z_score(data[col_name]) < 4]
-            elif col_name in threshold_3_cols:
-                data = data[cls.z_score(data[col_name]) < 3]
+    def drop_outliers(cls, data, col_name):
+        if col_name in cls.ZSCORE_WITH_THRESHOLD_4:
+            data = data[cls.z_score(data[col_name]) < 4]
+        elif col_name in cls.ZSCORE_WITH_THRESHOLD_3:
+            data = data[cls.z_score(data[col_name]) < 3]
         return data
 
 
@@ -86,3 +99,19 @@ class DiamondsDataTransform(BaseDataTransform, DiamondsDatasetConfig):
         col -= col.mean()
         col /= col.std()
         return col
+
+
+    @staticmethod
+    def apply_target_scaler(col):
+        print('HERE')
+        col = np.log(col)
+        mu = col.mean()
+        std = col.std()
+        col -= mu
+        col /= std
+
+        metadata = {
+            'target_mu': mu,
+            'target_std': std
+        }
+        return col, metadata

@@ -10,7 +10,7 @@ def _pytorch_model_train_component(
     val_dataset: dsl.Input[dsl.Dataset],
     num_epochs: int,
     dataset_cfg: dict,
-    best_model: dsl.Output[dsl.Model]
+    trained_model: dsl.Output[dsl.Model]
 ):
     import pandas as pd
     import numpy as np
@@ -22,7 +22,7 @@ def _pytorch_model_train_component(
     from torch.utils.data import DataLoader, Dataset
 
 
-    checkpoints_directory = tempfile.tempdir
+    checkpoints_directory = tempfile.TemporaryDirectory().name
 
 
     class RegressionModel(torch.nn.Module):
@@ -32,31 +32,44 @@ def _pytorch_model_train_component(
                 num_embeddings=cat_features_amount,
                 embedding_dim=embedding_dim
             )
-            self.relu = torch.nn.ReLU()
-            self.sig = torch.nn.Sigmoid()
-            self.dense1 = torch.nn.Linear(
-                (embedding_dim * cat_features_amount) + num_features_amount,
-                512
+
+            self.input_size = (embedding_dim * cat_features_amount) + num_features_amount
+            self.layer1 = torch.nn.Sequential(
+                torch.nn.Linear(self.input_size, 512),
+                torch.nn.ReLU(),
+                torch.nn.BatchNorm1d(512),
+                torch.nn.Dropout(0.5)
             )
-            self.dense2 = torch.nn.Linear(512, 1024)
-            self.dense3 = torch.nn.Linear(1024, 512)
-            self.dense4 = torch.nn.Linear(512, 128)
-            self.out = torch.nn.Linear(128, 1)
+            self.layer2 = torch.nn.Sequential(
+                torch.nn.Linear(512, 256),
+                torch.nn.ReLU(),
+                torch.nn.BatchNorm1d(256),
+                torch.nn.Dropout(0.3)
+            )
+            self.layer3 = torch.nn.Sequential(
+                torch.nn.Linear(256, 128),
+                torch.nn.ReLU(),
+                torch.nn.BatchNorm1d(128),
+                torch.nn.Dropout(0.3)
+            )
+            self.layer4 = torch.nn.Sequential(
+                torch.nn.Linear(128, 64),
+                torch.nn.ReLU(),
+                torch.nn.BatchNorm1d(64),
+                torch.nn.Dropout(0.3)
+            )
+            self.output = torch.nn.Linear(64, 1)
 
         def forward(self, x_cat, x_num):
             x_cat = self.embedding(x_cat)
             x_cat = x_cat.view(x_cat.size(0), -1)
             x = torch.cat([x_cat, x_num], dim=1)
 
-            x = self.dense1(x)
-            x = self.relu(x)
-            x = self.dense2(x)
-            x = self.relu(x)
-            x = self.dense3(x)
-            x = self.relu(x)
-            x = self.dense4(x)
-            x = self.sig(x)
-            x = self.out(x)
+            x = self.layer1(x)
+            x = self.layer2(x)
+            x = self.layer3(x)
+            x = self.layer4(x)
+            x = self.output(x)
             return x
 
 
@@ -196,7 +209,7 @@ def _pytorch_model_train_component(
 
     best_weights_path = os.path.join(checkpoints_directory, f'epoch_{best_epoch}', 'weights.pth')
     model.load_state_dict(torch.load(best_weights_path))
-    torch.jit.script(model).save(best_model.path)
+    torch.jit.script(model).save(trained_model.path)
 
 
 

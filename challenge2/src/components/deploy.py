@@ -6,7 +6,7 @@ from functools import partial
 
 @dsl.component(base_image='python:3.10', packages_to_install=['minio', 'pandas'])
 def _deploy_component(
-    best_model: Input[Model],
+    trained_model: Input[Model],
     user_data: Input[Dataset],
     base_data: Input[Dataset],
     baseline_model_loc: str,
@@ -31,10 +31,9 @@ def _deploy_component(
     )
 
     def put_on_minio(local_path, s3_location):
-        with open(local_path, 'r') as f:
-            result = client.fput_object(
-                s3_location.split('/', 1), local_path,
-            )
+        result = client.fput_object(
+            *s3_location.split('/', 1), local_path,
+        )
         print(f"[*] Created {result.object_name} object; etag: {result.etag}, version-id: {result.version_id}")
 
     _user_data = pd.read_csv(user_data.path)
@@ -42,11 +41,11 @@ def _deploy_component(
 
     new_baseline_data = pd.concat((_base_data, _user_data)) 
 
-    new_baseline_data_path = NamedTemporaryFile()
+    new_baseline_data_path = NamedTemporaryFile().name
 
     new_baseline_data.to_csv(new_baseline_data_path, index=False)
 
-    put_on_minio(best_model.path, baseline_model_loc)
+    put_on_minio(trained_model.path, baseline_model_loc)
     put_on_minio(new_baseline_data_path, baseline_data_loc)
 
 

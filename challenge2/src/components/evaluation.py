@@ -1,8 +1,9 @@
 from kfp import dsl
-from kfp.dsl import Input, Dataset, Model, Output
+from kfp.dsl import Input, Dataset, Model, Output, Artifact
 from functools import partial
 
 from challenge2.src.configs import DiamondsDatasetConfig
+from typing import NamedTuple
 
 
 @dsl.component(base_image='python:3.10', packages_to_install=['pandas', 'torch', 'numpy'])
@@ -11,8 +12,12 @@ def _pytorch_model_evaluation_component(
     test_dataset: Input[Dataset],
     base_model: Input[Model],
     dataset_cfg: dict,
-    current_model_loss: Output[float],
-    base_model_loss: Output[float]
+) -> NamedTuple(
+  'results',
+  [
+    ('current_model_loss', float),
+    ('base_model_loss', float)
+  ]
 ):
     import torch
     import pandas as pd
@@ -79,7 +84,7 @@ def _pytorch_model_evaluation_component(
 
     _model = torch.jit.load(model.path)
     _test_dataset = pd.read_csv(test_dataset.path)
-    _base_model = torch.load(base_model.path)
+    _base_model = torch.jit.load(base_model.path)
 
     test_loader = get_dataloader(_test_dataset)
 
@@ -91,7 +96,9 @@ def _pytorch_model_evaluation_component(
 
     print(f"[*] Current Model Loss: {current_model_loss}")
     print(f"[*] Baseline Model Loss: {base_model_loss}")
-
+    
+    return current_model_loss, base_model_loss
+    
 
 pytorch_model_evaluation_component = partial(
     _pytorch_model_evaluation_component,

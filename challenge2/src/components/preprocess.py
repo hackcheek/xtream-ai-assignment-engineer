@@ -27,7 +27,7 @@ def _preprocess_component(
 
     def drop_outliers(data):
         threshold_4_cols = ['table', 'depth', 'carat']
-        threshold_3_cols = ['x', 'y', 'z']
+        threshold_3_cols = ['x', 'y', 'z', 'price']
         for col_name in data.columns:
             if col_name in threshold_4_cols:
                 data = data[z_score(data[col_name]) < 4]
@@ -50,6 +50,13 @@ def _preprocess_component(
 
 
     def apply_std_scaler(col):
+        col -= col.mean()
+        col /= col.std()
+        return col
+
+
+    def apply_target_scaler(col):
+        col = np.log(col)
         col -= col.mean()
         col /= col.std()
         return col
@@ -85,8 +92,10 @@ def _preprocess_component(
         for col_name in data.columns:
             if col_name in cfg['CATEGORICAL_FEATURES']:
                 data = apply_one_hot_encoder(data, col_name)
-            elif col_name in cfg['NUMERICAL_FEATURES'] + [cfg['TARGET']]:
+            elif col_name in cfg['NUMERICAL_FEATURES']:
                 data[col_name] = apply_std_scaler(data[col_name])
+            elif col_name == cfg['TARGET']:
+                data[col_name] = apply_target_scaler(data[col_name])
 
         return data
 

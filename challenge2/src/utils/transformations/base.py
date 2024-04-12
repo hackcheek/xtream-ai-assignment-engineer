@@ -1,16 +1,15 @@
-import abc
-
-from typing import Any
+from typing import Any, Literal
 
 
-class BaseDataTransform(abc.ABC):
+class BaseDataTransform:
     """
     This clase should provide preprocessing and postprocessing transformations on a specific dataset
     """
-    @classmethod
-    def preprocessing(cls, data: Any) -> tuple[Any, Any, Any]:
-        return NotImplemented
 
     @classmethod
-    def postprocessing(cls, current_data: Any, user_data: Any) -> Any:
-        return NotImplemented
+    def preprocessing(cls, data: Any, for_inference: bool) -> Any:
+        raise NotImplementedError
+
+    @classmethod
+    def postprocessing(cls, data: Any) -> Any:
+        raise NotImplementedError
