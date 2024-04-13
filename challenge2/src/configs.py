@@ -1,3 +1,6 @@
+from challenge2.src.utils.schemas.pipeline import PipelineConfig
+
+
 class Config:
     @classmethod
     def asdict(cls) -> dict:
@@ -29,3 +32,7 @@ class MinioConfig(Config):
     PORT = 9000
     ACCESS_KEY = 'minio'
     SECRET_KEY = 'minio123'
+
+
+class CH2PipelineConfig(PipelineConfig):
+    num_epochs: int = 5

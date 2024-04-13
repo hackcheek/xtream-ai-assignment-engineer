@@ -1,5 +1,5 @@
 from kfp import dsl
-from kfp.dsl import Input, Dataset, Model, Output, Artifact
+from kfp.dsl import Input, Dataset, Model
 from functools import partial
 
 from challenge2.src.configs import DiamondsDatasetConfig

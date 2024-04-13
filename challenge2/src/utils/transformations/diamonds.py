@@ -103,7 +103,6 @@ class DiamondsDataTransform(BaseDataTransform, DiamondsDatasetConfig):
 
     @staticmethod
     def apply_target_scaler(col):
-        print('HERE')
         col = np.log(col)
         mu = col.mean()
         std = col.std()

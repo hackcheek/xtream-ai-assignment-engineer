@@ -1,5 +1,5 @@
 from kfp import dsl
-from kfp.dsl import Dataset, Output, Model, Input
+from kfp.dsl import Dataset, Model, Input
 from challenge2.src.configs import MinioConfig
 from functools import partial
 

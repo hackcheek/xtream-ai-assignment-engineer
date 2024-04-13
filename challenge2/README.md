@@ -17,7 +17,7 @@ However I know this is not the best approach for every case. Another approach is
 This approach is very useful for model as a service and fast iteration
 
 ### Kubeflow Pipeline Graph
-<img src="./assets/kubeflow_graph.jpeg" width=400>
+<img src="./assets/kubeflow_graph.jpeg" width=600>
 <img src="./assets/pipeline_graph.jpeg" width=400>
 
 ### Next Steps:

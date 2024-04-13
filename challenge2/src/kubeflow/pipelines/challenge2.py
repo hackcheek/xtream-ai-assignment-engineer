@@ -2,20 +2,16 @@ from kfp import Client, local, dsl
 from kfp.compiler import Compiler
 from typing import NamedTuple
 
-from challenge2.src.components.ingest import ingest_csv_component
-from challenge2.src.components.preprocess import preprocess_component
-from challenge2.src.components.train import pytorch_model_train_component
-from challenge2.src.components.evaluation import pytorch_model_evaluation_component
-from challenge2.src.components.deploy import deploy_component
+from challenge2.src.kubeflow.components.ingest import ingest_csv_component
+from challenge2.src.kubeflow.components.preprocess import preprocess_component
+from challenge2.src.kubeflow.components.train import pytorch_model_train_component
+from challenge2.src.kubeflow.components.evaluation import pytorch_model_evaluation_component
+from challenge2.src.kubeflow.components.deploy import deploy_component
+from challenge2.src.utils.schemas.report import PipelineReport
 from challenge2.src.configs import MinioConfig
 
 
 local.init(runner=local.DockerRunner())
-
-
-class PipelineReport(NamedTuple):
-    current_model_loss: float
-    base_model_loss: float 
 
 
 @dsl.pipeline(

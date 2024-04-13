@@ -1,13 +1,16 @@
 ch1:
 	jupyter lab .
 
-ch2: ch2_download_data ch2_run_pipeline
+ch2:
+	python -m challenge2.src.local.main
 
-ch2_run_pipeline: ch2_pf_minio_pod
-	python -m challenge2.src.pipelines.challenge2 run
+ch2_kf: ch2_download_data ch2_kf_run_pipeline
 
-ch2_save_pipeline: ch2_pf_minio_pod
-	python -m challenge2.src.pipelines.challenge2 save
+ch2_kf_run_pipeline: ch2_pf_minio_pod
+	python -m challenge2.src.kubeflow.pipelines.challenge2 run
+
+ch2_kf_save_pipeline: ch2_pf_minio_pod
+	python -m challenge2.src.kubeflow.pipelines.challenge2 save
 
 ch2_download_data:
 	bash challenge2/download_new_dataset.sh
@@ -17,7 +20,7 @@ ch2_pf_minio_pod:
 	$(eval minio_pod_name = $(shell kubectl get pod -n kubeflow | grep -i minio | awk '{print $$1}'))
 	kubectl port-forward -n kubeflow $(minio_pod_name) 9000:9000 &>/dev/null &
 
-ch2_dashboard:
+ch2_kf_dashboard:
 	bash -c "sleep 2; open http://localhost:8080" &
 	kubectl port-forward -n kubeflow svc/ml-pipeline-ui 8080:80
 
