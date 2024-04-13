@@ -1,4 +1,4 @@
-from challenge2.src.local.components.ingest.base import BaseIngestComponent
+from challenge2.src.local.components.ingest.base import IngestComponent
 
 
-__all__ = ["BaseIngestComponent"]
+__all__ = ["IngestComponent"]

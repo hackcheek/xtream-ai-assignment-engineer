@@ -39,7 +39,6 @@ restart_kubeflow: delete_experiment_containers
 delete_experiment_containers:
 	kubectl get pod -n kubeflow | grep challenge | awk '{print $1}' | xargs kubectl delete pod -n kubeflow
 
-
 ch3:
 	lsof -i :9595 | grep -i python | head -n 1 | awk '{print $$2}' | xargs kill
 	python -m challenge3.src.main &
@@ -51,3 +50,6 @@ ch3_start_api:
 
 ch3_run_tests:
 	pytest
+
+ch4:
+	cat challenge4/README.md

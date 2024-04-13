@@ -81,14 +81,26 @@ So, ready to add some sparkle to this challenge? Let's make these diamonds shine
 
 ---
 
+## Pipeline Graph
+<img src="challenge2/assets/pipeline_graph.jpeg" width=400>
+
+---
+
+> ### Curious fact: I've wrote +2200 lines of code. I really enjoy this coding time. I tried to make it as scalable as possible
+> command to see the lines written (`find . -name "*.py" | xargs cat | wc -l`)
+
 ## How to run
-I develop a makefile to run this repository.
+I developed a makefile to run this repository.
 
-run challenge1:
-make ch1
+run challenge1:\
+`make ch1`
 
-run challenge2:
-make ch2
+run challenge2:\
+`make ch2` (locally)\
+`make ch2_kf` (kubeflow)
 
-run challenge3:
-make ch3
+run challenge3:\
+`make ch3`
+
+run challenge4:\
+`make ch4`

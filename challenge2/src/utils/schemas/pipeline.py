@@ -73,6 +73,7 @@ class EvaluationOutput:
 @dataclass
 class DeployInput:
     user_data: DatasetArtifact
+    base_data: DatasetArtifact
     model: ModelArtifact
 
 

@@ -1,4 +1,4 @@
-from challenge2.src.local.components.deploy.base import BaseDeployComponent
+from challenge2.src.local.components.deploy.base import DeployComponent
 
 
-__all__ = ["BaseDeployComponent"]
+__all__ = ["DeployComponent"]

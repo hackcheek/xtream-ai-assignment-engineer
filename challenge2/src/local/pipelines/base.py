@@ -38,11 +38,8 @@ class BaseReTrainPipeline(
 
         results_dict = eval_op.results.content()
         if results_dict['current_model_loss'] < results_dict['base_model_loss']:
-            deploy_in = DeployInput(ingest_op.user_data, train_op.model)
+            deploy_in = DeployInput(ingest_op.user_data, ingest_op.base_data, train_op.model)
             deploy_op = self.deploy(deploy_in)
 
             if not deploy_op.deployed:
                 raise RuntimeError('Error trying to deploy')
-
-    def build_input(self, attributes: dict[str, Any]):
-        return type('', (object,), attributes)

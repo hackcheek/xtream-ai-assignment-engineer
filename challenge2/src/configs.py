@@ -1,4 +1,5 @@
 from challenge2.src.utils.schemas.pipeline import PipelineConfig
+from dataclasses import dataclass
 
 
 class Config:
@@ -34,5 +35,8 @@ class MinioConfig(Config):
     SECRET_KEY = 'minio123'
 
 
+@dataclass
 class CH2PipelineConfig(PipelineConfig):
     num_epochs: int = 5
+    output_model_path: str = 'challenge2/bucket/deployed_model.pt'
+    output_data_path: str = 'challenge2/bucket/data.csv'
