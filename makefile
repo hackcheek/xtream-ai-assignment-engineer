@@ -1,26 +1,27 @@
-ch1:
+.PHONY: modeling
+modeling:
 	jupyter lab .
 
-ch2:
-	python -m challenge2.src.local.main
+pipe:
+	python -m pipes_code.src.local.main
 
-ch2_kf: ch2_download_data ch2_kf_run_pipeline
+pipe_kf: pipe_download_data pipe_kf_run_pipeline
 
-ch2_kf_run_pipeline: ch2_pf_minio_pod
-	python -m challenge2.src.kubeflow.pipelines.challenge2 run
+pipe_kf_run_pipeline: pipe_pf_minio_pod
+	python -m pipes_code.src.kubeflow.pipelines.retrain_pipe run
 
-ch2_kf_save_pipeline: ch2_pf_minio_pod
-	python -m challenge2.src.kubeflow.pipelines.challenge2 save
+pipe_kf_save_pipeline: pipe_pf_minio_pod
+	python -m pipes_code.src.kubeflow.pipelines.retrain_pipe save
 
-ch2_download_data:
-	bash challenge2/download_new_dataset.sh
+pipe_download_data:
+	bash pipes_code/download_new_dataset.sh
 
-ch2_pf_minio_pod:
+pipe_pf_minio_pod:
 	lsof -i :9000 | grep kubectl | head -n 1 | awk '{print $$2}' | xargs kill
 	$(eval minio_pod_name = $(shell kubectl get pod -n kubeflow | grep -i minio | awk '{print $$1}'))
 	kubectl port-forward -n kubeflow $(minio_pod_name) 9000:9000 &>/dev/null &
 
-ch2_kf_dashboard:
+pipe_kf_dashboard:
 	bash -c "sleep 2; open http://localhost:8080" &
 	kubectl port-forward -n kubeflow svc/ml-pipeline-ui 8080:80
 
@@ -37,19 +38,17 @@ restart_kubeflow: delete_experiment_containers
 	kubectl rollout restart deployment/ml-pipeline-ui -n kubeflow
 
 delete_experiment_containers:
-	kubectl get pod -n kubeflow | grep challenge | awk '{print $1}' | xargs kubectl delete pod -n kubeflow
+	kubectl get pod -n kubeflow | grep pipeline | awk '{print $1}' | xargs kubectl delete pod -n kubeflow
 
-ch3:
+.PHONY: api
+api:
 	lsof -i :9595 | grep -i python | head -n 1 | awk '{print $$2}' | xargs kill
-	python -m challenge3.src.main &
+	python -m api.src.main &
 	sleep 5; pytest
 	open http://localhost:9595/docs
 
-ch3_start_api:
-	python -m challenge3.src.main
+start_api:
+	python -m api.src.main
 
-ch3_run_tests:
+api_run_tests:
 	pytest
-
-ch4:
-	cat challenge4/README.md
